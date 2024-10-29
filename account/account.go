@@ -44,7 +44,7 @@ func NewAccount(login,
 
 	_, err := url.ParseRequestURI(urlString)
 	if err != nil {
-		return nil, errors.New("неверный формат URL")
+		return nil, errors.New("Неверный формат URL")
 	}
 
 	acc := &Account{

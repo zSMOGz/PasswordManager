@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+	"main.go/encryptor"
 	"main.go/output"
 )
 
@@ -28,10 +30,11 @@ type Vault struct {
 
 type VaultWithDb struct {
 	Vault
-	db Db
+	db  Db
+	enc encryptor.Encryptor
 }
 
-func NewVault(db Db) *VaultWithDb {
+func NewVault(db Db, enc encryptor.Encryptor) *VaultWithDb {
 	file, err := db.Read()
 	if err != nil {
 		return &VaultWithDb{
@@ -39,26 +42,32 @@ func NewVault(db Db) *VaultWithDb {
 				Accounts:  []Account{},
 				UpdatedAt: time.Now(),
 			},
-			db: db,
+			db:  db,
+			enc: enc,
 		}
 	}
+	data := enc.Decrypt(file)
 
 	var vault Vault
-	err = json.Unmarshal(file, &vault)
+	err = json.Unmarshal(data, &vault)
+	color.Cyan("Аккаунтов найдено: %d", len(vault.Accounts))
+
 	if err != nil {
-		output.PrintError("Не удалось прочитать файл data.json")
+		output.PrintError("Не удалось прочитать файл data.vault")
 		return &VaultWithDb{
 			Vault: Vault{
 				Accounts:  []Account{},
 				UpdatedAt: time.Now(),
 			},
-			db: db,
+			db:  db,
+			enc: enc,
 		}
 	}
 
 	return &VaultWithDb{
 		Vault: vault,
 		db:    db,
+		enc:   enc,
 	}
 }
 
@@ -69,10 +78,12 @@ func (vault *VaultWithDb) AddAccount(acc Account) {
 	vault.save()
 }
 
-func (vault *VaultWithDb) FindAccountsByURL(url string) []Account {
+func (vault *VaultWithDb) FindAccounts(str string,
+	checker func(Account, string) bool) []Account {
+
 	var accounts []Account
 	for _, account := range vault.Accounts {
-		isMatched := strings.Contains(account.Url, url)
+		isMatched := checker(account, str)
 		if isMatched {
 			accounts = append(accounts, account)
 		}
@@ -110,7 +121,9 @@ func (vault *VaultWithDb) save() {
 	vault.UpdatedAt = time.Now()
 	data, err := vault.Vault.ToBytes()
 	if err != nil {
-		output.PrintError("Не удалось преобразовать в json")
+		output.PrintError("Не удалось преобразовать данные для сохранения")
 	}
-	vault.db.Write(data)
+	encData := vault.enc.Encrypt(data)
+
+	vault.db.Write(encData)
 }

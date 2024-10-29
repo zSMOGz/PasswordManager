@@ -2,16 +2,33 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/fatih/color"
 	"main.go/account"
+	"main.go/encryptor"
 	"main.go/files"
 	"main.go/output"
+
+	"github.com/fatih/color"
+	"github.com/joho/godotenv"
 )
+
+var menu = map[string]func(*account.VaultWithDb){
+	"1": createAccount,
+	"2": findAccountByUrl,
+	"3": findAccountByLogin,
+	"4": deleteAccount,
+}
 
 func main() {
 	fmt.Println("Менеджер паролей")
-	vault := account.NewVault(files.NewJsonDb("data.json"))
+	err := godotenv.Load()
+	if err != nil {
+		output.PrintError("Не удалось найти env файл")
+	}
+
+	vault := account.NewVault(files.NewJsonDb("data.vault"),
+		*encryptor.NewEncryptor())
 
 	isContinue := true
 	for isContinue {
@@ -20,9 +37,9 @@ func main() {
 }
 
 func createAccount(vault *account.VaultWithDb) {
-	login := promptData([]string{"Введите логин"})
-	password := promptData([]string{"Введите пароль"})
-	url := promptData([]string{"Введите URL"})
+	login := promptData("Введите логин")
+	password := promptData("Введите пароль")
+	url := promptData("Введите URL")
 
 	newAccount, error := account.NewAccount(login,
 		password,
@@ -35,21 +52,36 @@ func createAccount(vault *account.VaultWithDb) {
 	vault.AddAccount(*newAccount)
 }
 
-func findAccount(vault *account.VaultWithDb) {
-	url := promptData([]string{"Введите URL для поиска"})
-	accounts := vault.FindAccountsByURL(url)
+func findAccountByUrl(vault *account.VaultWithDb) {
+	url := promptData("Введите URL для поиска")
+	accounts := vault.FindAccounts(url, func(acc account.Account, url string) bool {
+		return strings.Contains(acc.Url, url)
+	})
 
-	if len(accounts) == 0 {
-		output.PrintError("По указанному URL аккаунтов не нашлось")
+	outputResaultFind(&accounts)
+}
+
+func findAccountByLogin(vault *account.VaultWithDb) {
+	url := promptData("Введите логин для поиска")
+	accounts := vault.FindAccounts(url, func(acc account.Account, login string) bool {
+		return strings.Contains(acc.Login, login)
+	})
+
+	outputResaultFind(&accounts)
+}
+
+func outputResaultFind(accounts *[]account.Account) {
+	if len(*accounts) == 0 {
+		output.PrintError("По указанному параметру аккаунтов не нашлось")
 	} else {
-		for _, account := range accounts {
+		for _, account := range *accounts {
 			account.Output()
 		}
 	}
 }
 
 func deleteAccount(vault *account.VaultWithDb) {
-	url := promptData([]string{"Введите URL для поиска"})
+	url := promptData("Введите URL для поиска")
 	isDeleted := vault.DeleteAccountsByURL(url)
 	if isDeleted {
 		color.Green("Найденные аккаунты были удалены")
@@ -58,7 +90,7 @@ func deleteAccount(vault *account.VaultWithDb) {
 	}
 }
 
-func promptData[T any](prompt []T) string {
+func promptData(prompt ...any) string {
 	for index, element := range prompt {
 		if index == (len(prompt) - 1) {
 			fmt.Printf("%v: ", element)
@@ -72,25 +104,19 @@ func promptData[T any](prompt []T) string {
 }
 
 func getMenu(vault *account.VaultWithDb) bool {
-	command := promptData([]string{
-		"1. Создать аккаунт",
-		"2. Найти аккаунт",
-		"3. Удалить аккаунт",
-		"4. Выход",
+	command := promptData("1. Создать аккаунт",
+		"2. Найти аккаунт по URL",
+		"3. Найти аккаунт по логину",
+		"4. Удалить аккаунт",
+		"5. Выход",
 		"Выберете вариант",
-	})
+	)
 
-	switch command {
-	case "1":
-		createAccount(vault)
-		return true
-	case "2":
-		findAccount(vault)
-		return true
-	case "3":
-		deleteAccount(vault)
-		return true
-	default:
+	menuFunc := menu[command]
+	if menuFunc == nil {
 		return false
+	} else {
+		menuFunc(vault)
+		return true
 	}
 }

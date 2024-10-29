@@ -21,7 +21,7 @@ func NewJsonDb(name string) *JsonDb {
 func (db *JsonDb) Read() ([]byte, error) {
 	data, err := os.ReadFile(db.filename)
 	if err != nil {
-		output.PrintError(err)
+		output.PrintError("Файл не найден")
 		return nil, err
 	}
 
