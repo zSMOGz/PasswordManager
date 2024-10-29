@@ -5,11 +5,13 @@ import (
 
 	"github.com/fatih/color"
 	"main.go/account"
+	"main.go/files"
+	"main.go/output"
 )
 
 func main() {
 	fmt.Println("Менеджер паролей")
-	vault := account.NewVault()
+	vault := account.NewVault(files.NewJsonDb("data.json"))
 
 	isContinue := true
 	for isContinue {
@@ -17,10 +19,10 @@ func main() {
 	}
 }
 
-func createAccount() {
-	login := promptData("Введите логин: ")
-	password := promptData("Введите пароль: ")
-	url := promptData("Введите URL: ")
+func createAccount(vault *account.VaultWithDb) {
+	login := promptData([]string{"Введите логин"})
+	password := promptData([]string{"Введите пароль"})
+	url := promptData([]string{"Введите URL"})
 
 	newAccount, error := account.NewAccount(login,
 		password,
@@ -29,16 +31,16 @@ func createAccount() {
 		fmt.Println(error)
 		return
 	}
-	vault := account.NewVault()
+
 	vault.AddAccount(*newAccount)
 }
 
-func findAccount(vault *account.Vault) {
-	url := promptData("Введите URL для поиска: ")
+func findAccount(vault *account.VaultWithDb) {
+	url := promptData([]string{"Введите URL для поиска"})
 	accounts := vault.FindAccountsByURL(url)
 
 	if len(accounts) == 0 {
-		color.Red("По указанному URL аккаунтов не нашлось")
+		output.PrintError("По указанному URL аккаунтов не нашлось")
 	} else {
 		for _, account := range accounts {
 			account.Output()
@@ -46,44 +48,46 @@ func findAccount(vault *account.Vault) {
 	}
 }
 
-func deleteAccount(vault *account.Vault) {
-	url := promptData("Введите URL для поиска: ")
+func deleteAccount(vault *account.VaultWithDb) {
+	url := promptData([]string{"Введите URL для поиска"})
 	isDeleted := vault.DeleteAccountsByURL(url)
 	if isDeleted {
 		color.Green("Найденные аккаунты были удалены")
 	} else {
-		color.Red("По указанному URL аккаунтов не нашлось")
+		output.PrintError("По указанному URL аккаунтов не нашлось")
 	}
 }
 
-func promptData(prompt string) string {
-	fmt.Print(prompt, " ")
+func promptData[T any](prompt []T) string {
+	for index, element := range prompt {
+		if index == (len(prompt) - 1) {
+			fmt.Printf("%v: ", element)
+		} else {
+			fmt.Println(element)
+		}
+	}
 	var res string
 	fmt.Scan(&res)
 	return res
 }
 
-func printMenu() {
-	fmt.Println("1. Создать аккаунт")
-	fmt.Println("2. Найти аккаунт")
-	fmt.Println("3. Удалить аккаунт")
-	fmt.Println("4. Выход")
-}
-
-func getMenu(vault *account.Vault) bool {
-	printMenu()
-
-	var command int
-	fmt.Scan(&command)
+func getMenu(vault *account.VaultWithDb) bool {
+	command := promptData([]string{
+		"1. Создать аккаунт",
+		"2. Найти аккаунт",
+		"3. Удалить аккаунт",
+		"4. Выход",
+		"Выберете вариант",
+	})
 
 	switch command {
-	case 1:
-		createAccount()
+	case "1":
+		createAccount(vault)
 		return true
-	case 2:
+	case "2":
 		findAccount(vault)
 		return true
-	case 3:
+	case "3":
 		deleteAccount(vault)
 		return true
 	default:
